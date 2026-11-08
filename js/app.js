@@ -25,7 +25,7 @@
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const VERSION = "1.4";
+  const VERSION = "1.5";
 
   // ------------------------------------------------------------------ Speicher
   const KEY = "tttraining.v1";
@@ -186,7 +186,7 @@
     s += `<line x1="${G.tx - 8}" y1="${G.net}" x2="${G.tx + G.tw + 8}" y2="${G.net}" stroke="#f4f4f0" stroke-width="${thumb ? 7 : 3.5}"/>`;
     if (!thumb) {
       const lab = (bottom, lefty) => {
-        const y = bottom ? G.ty + G.tl - 8 : G.ty + 14;
+        const y = bottom ? G.ty + G.tl + 12 : G.ty - 5;
         const vx = E.G.tx + G.tw * (((bottom ? 0.8 : 0.2) - 0.5) * (lefty ? -1 : 1) * 1.12 + 0.5);
         const rx = E.G.tx + G.tw * (((bottom ? 0.2 : 0.8) - 0.5) * (lefty ? -1 : 1) * 1.12 + 0.5);
         return `<text x="${f1(vx)}" y="${y}" text-anchor="middle" font-size="9" font-weight="700" fill="#f4f4f0" opacity=".55">VH</text><text x="${f1(rx)}" y="${y}" text-anchor="middle" font-size="9" font-weight="700" fill="#f4f4f0" opacity=".55">RH</text>`;

@@ -154,8 +154,8 @@
     return short ? G.net - 34 : G.ty + 26;
   }
   function hitY(bottom, short) {
-    if (bottom) return short ? G.net + 58 : G.ty + G.tl + 12;
-    return short ? G.net - 58 : G.ty - 12;
+    if (bottom) return short ? G.net + 58 : G.ty + G.tl - 6;
+    return short ? G.net - 58 : G.ty + 6;
   }
 
   // Bahnen für einen Durchlauf. hands: { A: 'R'|'L', B: 'R'|'L' }
@@ -174,7 +174,7 @@
       for (const f of fromOpts) {
         for (const t of st.to) {
           const x1 = zoneX(f.z, bottom, hitLefty);
-          const y1 = serve ? (bottom ? G.ty + G.tl + 10 : G.ty - 10) : hitY(bottom, f.short);
+          const y1 = serve ? hitY(bottom, false) : hitY(bottom, f.short);
           const x2 = zoneX(t.z, !bottom, recvLefty);
           const y2 = landY(!bottom, t.short);
           segs.push({ x1, y1, x2, y2, from: f, to: t });
