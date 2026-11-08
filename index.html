@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f3b2c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TT Training">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<title>TT Training</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">TT <span class="accent">Training</span></div>
+    <nav class="tabs" id="tabs" aria-label="Bereiche">
+      <button class="tab active" data-tab="lib"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 13h8M8 17h5"/></svg><span>Übungen</span></button>
+      <button class="tab" data-tab="dice"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><circle cx="9" cy="9" r="1.2"/><circle cx="15" cy="15" r="1.2"/><circle cx="15" cy="9" r="1.2"/><circle cx="9" cy="15" r="1.2"/></svg><span>Einheit</span></button>
+      <button class="tab" data-tab="plan"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg><span>Plan</span></button>
+      <button class="tab" data-tab="stats"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M10 20V5M15 20v-7M20 20V9"/></svg><span>Fortschritt</span></button>
+    </nav>
+    <div class="topbar-actions">
+      <button id="players-btn" class="player-chip" aria-label="Spieler"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.8-3.2 3-5 5.5-5s4.7 1.8 5.5 5"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2c2.4-.3 4.4 1.2 5 4.3"/></svg><span id="players-label"></span></button>
+      <button id="settings-btn" class="icon-btn" aria-label="Einstellungen"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></button>
+    </div>
+  </header>
+  <div id="live-bar" class="live-bar hidden"></div>
+
+  <main>
+    <!-- ÜBUNGEN -->
+    <section id="tab-lib" class="tab-panel active">
+      <div id="install-hint" class="install-hint hidden"></div>
+      <div class="search-row">
+        <input type="search" id="lib-search" placeholder="Übung suchen …" autocomplete="off" enterkeyhint="search">
+        <button id="lib-fav" class="chip fav-chip" aria-pressed="false">★ Favoriten</button>
+      </div>
+      <div class="chip-row scroll-x" id="lib-goals"></div>
+      <div class="filter-row">
+        <label class="mini-select"><span>Stufe</span><select id="lib-lv"><option value="0">alle</option><option value="1">Leicht</option><option value="2">Mittel</option><option value="3">Schwer</option></select></label>
+        <label class="mini-select"><span>Ablauf</span><select id="lib-ablauf"><option value="all">alle</option><option value="reg">regelmäßig</option><option value="unreg">unregelmäßig</option><option value="frei">mit freiem Spiel</option></select></label>
+        <label class="mini-select"><span>Seite</span><select id="lib-side"><option value="all">alle</option><option value="VH">Vorhand</option><option value="RH">Rückhand</option></select></label>
+      </div>
+      <div class="count-row"><p class="muted small" id="lib-count"></p><button id="lib-new" class="secondary-btn small-btn">+ Eigene Übung</button></div>
+      <ul class="ex-list" id="lib-list"></ul>
+    </section>
+
+    <!-- WÜRFEL -->
+    <section id="tab-dice" class="tab-panel">
+      <p class="lead page-lead">Eine Einheit sind mehrere Übungen am Stück. Lass sie würfeln oder stell sie selbst zusammen, auch mit deinen eigenen Übungen. Jede Übung spielt ihr zweimal, einmal ist jeder aktiv.</p>
+      <button class="secondary-btn wide live-hint" id="live-btn2">ᛒ Zu zweit mit zwei Handys? Live verbinden</button>
+      <div class="seg mode-seg" id="unit-mode"></div>
+      <div class="panel" id="build-panel">
+        <p class="lead">Übungen der Reihe nach hinzufügen. Mit ↑ ↓ änderst du die Reihenfolge, mit ✕ fliegt eine Übung raus.</p>
+        <button class="fire-btn" id="unit-add">+ Übung hinzufügen</button>
+      </div>
+      <div class="panel" id="dice-panel">
+        <div class="step"><span class="step-no">1</span><div class="step-body">
+          <h3 class="step-title">Trainingsziele</h3>
+          <div class="chip-row" id="dice-goals"></div>
+          <p class="muted small">Nichts gewählt = alle Ziele.</p>
+        </div></div>
+        <div class="step"><span class="step-no">2</span><div class="step-body">
+          <h3 class="step-title">Wie viele Übungen?</h3>
+          <div class="seg" id="dice-count"></div>
+        </div></div>
+        <div class="step"><span class="step-no">3</span><div class="step-body">
+          <h3 class="step-title">Optionen</h3>
+          <p class="seg-label">Stufe</p><div class="seg" id="dice-lv"></div>
+          <p class="seg-label">Ablauf</p><div class="seg" id="dice-ablauf"></div>
+          <p class="seg-label">Schlagseite des aktiven Spielers</p><div class="seg" id="dice-side"></div>
+        </div></div>
+        <button id="dice-roll" class="fire-btn dice-btn"><span class="dice-ico" id="dice-ico">⚄</span> Würfeln</button>
+        <p class="status" id="dice-status"></p>
+      </div>
+      <div class="panel" id="dice-result">
+        <div class="unit-head"><h2 id="unit-title">Deine Einheit</h2><button class="secondary-btn small-btn" id="unit-clear">Leeren</button></div>
+        <p class="muted small" id="dice-sum"></p>
+        <ul class="ex-list compact" id="dice-list"></ul>
+        <button class="secondary-btn wide top-gap" id="unit-add2">+ Übung hinzufügen</button>
+        <div id="unit-actions">
+          <button id="dice-start" class="fire-btn top-gap">▶ Training starten</button>
+          <div class="row-buttons top-gap">
+            <button id="dice-plan" class="secondary-btn">📅 Planen</button>
+            <button id="unit-save" class="secondary-btn">💾 Speichern</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel" id="units-panel">
+        <h2>Gespeicherte Einheiten</h2>
+        <ul class="unit-list" id="units-list"></ul>
+      </div>
+    </section>
+
+    <!-- PLAN -->
+    <section id="tab-plan" class="tab-panel">
+      <div class="panel week-panel">
+        <div class="week-head">
+          <div>
+            <h2>Diese Woche</h2>
+            <p class="muted small" id="week-text"></p>
+          </div>
+          <div class="stepper">
+            <button class="icon-action" id="goal-minus" aria-label="Wochenziel kleiner">−</button>
+            <span><strong id="goal-val">2</strong><small>pro Woche</small></span>
+            <button class="icon-action" id="goal-plus" aria-label="Wochenziel größer">+</button>
+          </div>
+        </div>
+        <div class="week-bar" id="week-bar"></div>
+      </div>
+      <div class="panel">
+        <div class="cal-head">
+          <button id="cal-prev" class="icon-action" aria-label="Voriger Monat">‹</button>
+          <h2 id="cal-month">Monat</h2>
+          <button id="cal-next" class="icon-action" aria-label="Nächster Monat">›</button>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+        <p class="muted small cal-legend"><span class="lg-dot plan"></span> geplant <span class="lg-dot done"></span> trainiert · Tag antippen zum Planen oder Abhaken</p>
+      </div>
+      <div class="panel">
+        <h2>Als Nächstes</h2>
+        <ul class="next-list" id="next-list"></ul>
+      </div>
+    </section>
+
+    <!-- FORTSCHRITT -->
+    <section id="tab-stats" class="tab-panel">
+      <div class="panel sync-panel">
+        <div class="sync-row"><div><strong>Partner-Abgleich</strong><br><span class="muted small" id="sync-info"></span></div>
+        <button class="fire-btn sync-btn" id="sync-btn">ᛒ Abgleichen</button></div>
+        <button class="secondary-btn wide top-gap" id="code-btn">⇄ Per Code abgleichen (auch mit iPhone)</button>
+        <button class="secondary-btn wide top-gap" id="live-btn">ᛒ Live-Training verbinden (beide Handys zeigen dasselbe)</button>
+      </div>
+      <div class="chip-row" id="stat-who"></div>
+      <div class="tiles" id="stat-tiles"></div>
+      <div class="panel">
+        <h2>Übungszeit nach Trainingsziel</h2>
+        <div id="stat-goals" class="bars"></div>
+      </div>
+      <div class="panel">
+        <h2>Meistgespielte Übungen</h2>
+        <ol class="top-list" id="stat-top"></ol>
+      </div>
+      <div class="panel">
+        <h2>Letzte Trainings</h2>
+        <ul class="log-list" id="stat-log"></ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Übungsansicht -->
+<div id="detail" class="page hidden" role="dialog" aria-modal="true"></div>
+<!-- Lauf-Modus -->
+<div id="editor" class="page hidden" role="dialog" aria-modal="true"></div>
+<div id="run" class="playmode hidden" role="dialog" aria-modal="true"></div>
+<div id="sheets"></div>
+<div id="toast" class="toast hidden"></div>
+
+<script src="js/engine.js"></script>
+<script src="js/exercises.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
