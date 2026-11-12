@@ -1,5 +1,5 @@
-/* TT Training – Offline-Speicher. Version 5024a1dae699 */
-const CACHE = "tt-training-5024a1dae699";
+/* TT Training – Offline-Speicher. Version eb4af95eb972 */
+const CACHE = "tt-training-eb4af95eb972";
 const FILES = ["./", "css/app.css", "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png", "index.html", "js/app.js", "js/engine.js", "js/exercises.js", "manifest.webmanifest"];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));

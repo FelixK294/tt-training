@@ -347,3 +347,19 @@ h3.step-title { margin: 3px 0 10px; font-size: 0.98rem; }
 .install-hint { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; margin-bottom: 12px; border-radius: 14px; background: color-mix(in srgb, var(--orange-500) 14%, var(--bg-elevated)); border: 1px solid color-mix(in srgb, var(--orange-500) 40%, var(--border)); line-height: 1.45; }
 .install-hint > div { flex: 1; }
 .share-ico { display: inline-block; font-weight: 700; color: var(--accent-text); }
+
+/* ---------------- Schlagfolge im Training ---------------- */
+.pm-seq { list-style: none; margin: 0; padding: 6px 8px; max-height: 30dvh; overflow-y: auto; background: rgba(244,244,240,.07); border-radius: 12px; flex: none; }
+.pm-seq li { display: flex; align-items: center; gap: 8px; padding: 3px 4px; border-radius: 8px; font-size: 0.84rem; line-height: 1.25; opacity: .7; transition: background .15s, opacity .15s; }
+.pm-seq li.cur { background: rgba(255,210,63,.18); opacity: 1; }
+.pm-seq .seq-no { width: 20px; height: 20px; font-size: 0.7rem; }
+.pm-seq .seq-no.b { background: #e9e9e4; border: none; }
+.pm-st { min-width: 0; }
+.pm-st small { opacity: .7; font-size: 0.78rem; }
+.pm-st small::before { content: " → "; }
+.playmode { gap: 8px; }
+.playmode .pm-title { font-size: 1.15rem; }
+.pm-top .pm-x + .pm-x { margin-left: 6px; }
+.playmode .pm-time { font-size: clamp(48px, 15vw, 96px); margin: 0; }
+.seq li { transition: background .15s; border-radius: 8px; }
+.seq li.cur { background: color-mix(in srgb, var(--yellow) 22%, transparent); }

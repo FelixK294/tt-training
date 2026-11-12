@@ -14,18 +14,29 @@
     }
     return o;
   }
+  const overCache = new Map();
+  function overToEx(id) {
+    const rec = S.over && S.over[id];
+    if (!rec) return BUILT_BY_ID[id];
+    let o = overCache.get(id);
+    if (!o || o._src !== rec) {
+      o = Object.assign({}, BUILT_BY_ID[id], rec, { id, over: true, d: rec.d || BUILT_BY_ID[id].d, t: rec.t || "" });
+      o._src = rec; overCache.set(id, o);
+    }
+    return o;
+  }
   const BY_ID = new Proxy({}, { get: (_, id) => {
     if (typeof id !== "string") return undefined;
-    if (BUILT_BY_ID[id]) return BUILT_BY_ID[id];
+    if (BUILT_BY_ID[id]) return overToEx(id);
     const c = (S.custom || []).find((x) => x.id === id);
     return c ? customToEx(c) : undefined;
   } });
-  const allEx = () => BUILTIN.concat((S.custom || []).map(customToEx));
+  const allEx = () => BUILTIN.map((e) => overToEx(e.id)).concat((S.custom || []).map(customToEx));
   const GOAL = Object.fromEntries(E.GOALS.map((g) => [g.id, g]));
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const VERSION = "1.5";
+  const VERSION = "1.6";
 
   // ------------------------------------------------------------------ Speicher
   const KEY = "tttraining.v1";
@@ -33,17 +44,17 @@
     v: 1,
     players: [{ name: "Spieler 1", hand: "R" }, { name: "Spieler 2", hand: "R" }],
     favs: [], dur: {},
-    settings: { theme: "auto", sound: true, vib: true, pause: 20, lead: 5, both: true },
+    settings: { theme: "auto", sound: true, vib: true, pause: 20, lead: 5, both: true, vol: "laut" },
     weekGoal: 2, plan: {}, log: [], onboarded: false,
     dice: { goals: [], count: 3, lv: 0, ablauf: "all", side: "all" }, diceRes: [],
     lib: { goal: "all", lv: "0", ablauf: "all", side: "all", fav: false, q: "" },
     custom: [], units: [], unitMode: "dice", unitFrom: null,
-    people: {}, startWith: 0, delEx: [], lastSync: {}, statsFor: null,
+    people: {}, startWith: 0, delEx: [], lastSync: {}, statsFor: null, over: {},
   });
   function isObj(x) { return x && typeof x === "object" && !Array.isArray(x); }
   function merge(def, d) {
     for (const k in d) {
-      if (isObj(d[k]) && isObj(def[k]) && !["plan", "dur", "people", "lastSync"].includes(k)) def[k] = merge(def[k], d[k]);
+      if (isObj(d[k]) && isObj(def[k]) && !["plan", "dur", "people", "lastSync", "over"].includes(k)) def[k] = merge(def[k], d[k]);
       else def[k] = d[k];
     }
     return def;
@@ -153,18 +164,24 @@
       if (AC.state === "suspended") AC.resume();
     } catch (e) { AC = null; }
   }
-  function beep(f = 880, ms = 140, vol = 0.3) {
+  // Lautstärke: normal = weicher Sinuston, laut = kräftiger, sehr laut = durchdringender Rechteckton
+  const VOL = { normal: [0.35, "sine"], laut: [0.95, "triangle"], sehrlaut: [0.55, "square"] };
+  function beep(f = 880, ms = 140, rel = 1) {
     if (!S.settings.sound || !AC) return;
     try {
-      const o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime;
-      o.type = "sine"; o.frequency.value = f;
-      g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + ms / 1000);
-      o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + ms / 1000 + 0.03);
+      const [lvl, type] = VOL[S.settings.vol] || VOL.laut;
+      const o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime, end = t + ms / 1000;
+      o.type = type; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.001, lvl * rel), t + 0.012);
+      g.gain.setValueAtTime(Math.max(0.001, lvl * rel), end - 0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001, end);
+      o.connect(g); g.connect(AC.destination); o.start(t); o.stop(end + 0.03);
     } catch (e) { /* ohne Ton */ }
   }
   function vib(p) { if (S.settings.vib && navigator.vibrate) { try { navigator.vibrate(p); } catch (e) { /* nicht verfügbar */ } } }
-  function endSignal() { beep(660, 260); setTimeout(() => beep(990, 420), 280); vib([350, 150, 350]); }
-  function startSignal() { beep(1180, 220); vib(120); }
+  function endSignal() { beep(660, 300); setTimeout(() => beep(990, 300), 340); setTimeout(() => beep(1320, 600), 680); vib([350, 150, 350, 150, 350]); }
+  function startSignal() { beep(1320, 650); setTimeout(() => beep(1760, 350, 0.8), 120); vib([250, 80, 250]); }
 
   // ------------------------------------------------------------------ Diagramm
   const COL_A = "#ffd23f", COL_B = "#f4f4f0";
@@ -241,8 +258,8 @@
   }
 
   class DiagramAnim {
-    constructor(svg, ex, h) {
-      this.svg = svg; this.ex = ex; this.P = E.paths(ex, h);
+    constructor(svg, ex, h, onStep) {
+      this.svg = svg; this.ex = ex; this.P = E.paths(ex, h); this.onStep = onStep;
       this.ball = svg.querySelector(".dg-ball");
       this.groups = [...svg.querySelectorAll(".dg-step")];
       this.running = false;
@@ -260,6 +277,7 @@
       this.cur = segs[Math.floor(Math.random() * segs.length)];
       this.c = ctrl(this.cur, this.i);
       this.groups.forEach((g, k) => { g.style.opacity = k === this.i ? "1" : "0.3"; });
+      if (this.onStep) this.onStep(this.i);
     }
     frame(now) {
       const D = this.P[this.i] && E.STROKES[this.P[this.i].step.st].serve ? 1000 : 820, GAP = 170;
@@ -279,6 +297,7 @@
             this.wait = now + 1200;
             this.ball.setAttribute("cx", -20);
             this.groups.forEach((g) => { g.style.opacity = "1"; });
+            if (this.onStep) this.onStep(-1);
             return;
           }
         }
@@ -287,7 +306,8 @@
     }
   }
   let anim = null;
-  function playAnim(svg, ex, h) { stopAnim(); if (!svg) return; anim = new DiagramAnim(svg, ex, h); anim.start(); }
+  function playAnim(svg, ex, h, onStep) { stopAnim(); if (!svg) return; anim = new DiagramAnim(svg, ex, h, onStep); anim.start(); }
+  const markStep = (list) => (i) => { if (!list) return; [...list.children].forEach((li, k) => li.classList.toggle("cur", k === i)); };
   function stopAnim() { if (anim) anim.stop(); anim = null; }
 
   // ------------------------------------------------------------------ Bausteine
@@ -323,12 +343,20 @@
   }
 
   // ------------------------------------------------------------------ Übungen
+  // Topspin: der aktive Spieler zieht Topspin. Unterschnitt: im Ablauf kommt Unterschnitt vor (Schupf, Ablegen, Abwehr, Unterschnitt-Aufschlag).
+  function strokeKind(ex) {
+    let st;
+    try { st = E.parse(ex); } catch (e) { return { ts: false, us: false }; }
+    return { ts: st.some((x) => x.p === "A" && x.st === "TS"), us: st.some((x) => E.STROKES[x.st].out === "US") };
+  }
   function sideMatch(side, want) { return want === "all" || side === want || side === "beide"; }
   function libFiltered() {
     const f = S.lib, q = (f.q || "").trim().toLowerCase();
     return allEx().filter((ex) => {
       const m = E.meta(ex);
-      if (f.goal === "custom" ? !ex.custom : f.goal !== "all" && ex.goal !== f.goal) return false;
+      if (f.goal === "custom") { if (!ex.custom) return false; }
+      else if (f.goal === "ts" || f.goal === "us") { if (!strokeKind(ex)[f.goal]) return false; }
+      else if (f.goal !== "all" && ex.goal !== f.goal) return false;
       if (+f.lv && ex.lv !== +f.lv) return false;
       if (f.ablauf !== "all" && m.ablauf !== f.ablauf) return false;
       if (!sideMatch(m.side, f.side)) return false;
@@ -339,7 +367,7 @@
   }
   function renderLibGoals() {
     const el = $("#lib-goals");
-    el.innerHTML = [["all", "Alle"], ["custom", "★ Eigene"]].concat(E.GOALS.map((g) => [g.id, g.name]))
+    el.innerHTML = [["all", "Alle"], ["custom", "★ Eigene"], ["ts", "Topspin"], ["us", "Unterschnitt"]].concat(E.GOALS.map((g) => [g.id, g.name]))
       .map(([id, n]) => `<button class="chip ${S.lib.goal === id ? "active" : ""}" data-goal="${id}">${esc(n)}</button>`).join("");
   }
   function renderLib() {
@@ -394,7 +422,7 @@
     const scroll = el.scrollTop;
     el.innerHTML = `<div class="page-head"><button class="back-btn" data-back aria-label="Zurück">‹</button><h1>${esc(ex.name)}</h1><button class="fav-btn ${fav ? "on" : ""}" id="d-fav" aria-label="Favorit">${fav ? "★" : "☆"}</button></div>
       <div class="page-body">
-        <div class="tags">${ex.custom ? '<span class="tag own">Eigene</span>' : ""}<span class="tag goal">${esc(GOAL[ex.goal].name)}</span><span class="tag">${E.LEVELS[ex.lv]}</span><span class="tag">${E.ABLAUF_NAME[m.ablauf]}</span><span class="tag">${SIDE_TXT[m.side]}</span></div>
+        <div class="tags">${ex.custom ? '<span class="tag own">Eigene</span>' : ex.over ? '<span class="tag own">Angepasst</span>' : ""}<span class="tag goal">${esc(GOAL[ex.goal].name)}</span><span class="tag">${E.LEVELS[ex.lv]}</span><span class="tag">${E.ABLAUF_NAME[m.ablauf]}</span><span class="tag">${SIDE_TXT[m.side]}</span></div>
         <p class="lead">${esc(ex.d)}</p>
         <div class="detail-grid">
           <div class="diagram-card">
@@ -413,7 +441,7 @@
               </div>
               <button class="fire-btn" id="d-start">▶ Übung starten</button>
               <div class="row-buttons top-gap"><button class="secondary-btn" id="d-unit">+ Zur Einheit</button><button class="secondary-btn" id="d-plan">📅 Planen</button></div>
-              <div class="row-buttons top-gap">${ex.custom ? `<button class="secondary-btn" id="d-edit">✎ Bearbeiten</button><button class="secondary-btn danger" id="d-del">Löschen</button>` : `<button class="secondary-btn" id="d-copy">⧉ Als Vorlage für eigene Übung</button>`}</div>
+              <div class="row-buttons top-gap"><button class="secondary-btn" id="d-edit">✎ Bearbeiten</button>${ex.custom ? `<button class="secondary-btn danger" id="d-del">Löschen</button>` : `<button class="secondary-btn" id="d-copy">⧉ Als Vorlage</button>`}</div>
             </div>
           </div>
         </div>
@@ -436,7 +464,7 @@
     on("#d-edit", () => openEditor(ex.id));
     on("#d-copy", () => openEditor(null, ex));
     on("#d-del", () => deleteCustom(ex.id));
-    playAnim($(".diagram", el), ex, h);
+    playAnim($(".diagram", el), ex, h, markStep($(".seq", el)));
   }
 
   // ------------------------------------------------------------------ Würfel
@@ -900,7 +928,7 @@
     const t = $("#pm-time"); if (t) t.textContent = fmt(r);
     const bar = $("#pm-bar"); if (bar) bar.style.width = `${Math.min(100, Math.max(0, (1 - r / RUN.dur) * 100))}%`;
     const whole = Math.ceil(r);
-    if (whole <= 3 && whole >= 1 && whole !== RUN.lastBeep) { RUN.lastBeep = whole; beep(RUN.phase === "work" ? 740 : 880, 110, 0.22); }
+    if (whole <= 3 && whole >= 1 && whole !== RUN.lastBeep) { RUN.lastBeep = whole; beep(RUN.phase === "work" ? 740 : 880, 160, 0.75); }
     if (r <= 0) { nextPhase(false); if (RUN && RUN.host) liveSnapSend(); }
   }
   function renderRun() {
@@ -910,26 +938,30 @@
     const showIt = RUN.phase === "break" ? RUN.q[RUN.i + 1] : it;
     const ex = BY_ID[showIt.id], nm = namesFor(showIt.p), h = handsFor(showIt.p);
     const flip = RUN.live && showIt.p === 1;
+    const dsc = E.describe(ex, h, nm);
+    const seqHTML = dsc.lines.map((l, i) => `<li><span class="seq-no ${l.who === "A" ? "a" : "b"}">${i + 1}</span><span class="pm-st"><b>${esc(l.name)}:</b> ${esc(l.stroke)}<small>${esc(l.target)}</small></span></li>`).join("");
     const exNo = [...new Set(RUN.q.map((x) => x.id))].indexOf(showIt.id) + 1, exTotal = new Set(RUN.q.map((x) => x.id)).size;
     const roundNo = RUN.q.filter((x, k) => x.id === showIt.id && k <= RUN.q.indexOf(showIt)).length;
     const rounds = RUN.q.filter((x) => x.id === showIt.id).length;
     const phaseTxt = RUN.paused ? "Pausiert" : RUN.phase === "lead" ? "Gleich geht's los" : RUN.phase === "break" ? (showIt.id === it.id ? "Rollenwechsel" : "Nächste Übung") : "Läuft";
     el.className = "playmode" + (RUN.paused ? " is-paused" : RUN.phase === "break" ? " is-break" : "");
-    el.innerHTML = `<div class="pm-top"><span class="pm-count">Übung ${exNo}/${exTotal}${rounds > 1 ? ` · Durchgang ${roundNo}/${rounds}` : ""}</span><button class="pm-x" id="pm-x" aria-label="Beenden">✕</button></div>
+    el.innerHTML = `<div class="pm-top"><span class="pm-count">Übung ${exNo}/${exTotal}${rounds > 1 ? ` · Durchgang ${roundNo}/${rounds}` : ""}</span><button class="pm-x" id="pm-edit" aria-label="Übung bearbeiten">✎</button><button class="pm-x" id="pm-x" aria-label="Beenden">✕</button></div>
       <h2 class="pm-title">${esc(ex.name)}</h2>
       <div class="pm-who"><span class="pm-badge">${esc(nm.A)} aktiv</span><span>gegen ${esc(nm.B)}</span></div>
       <div class="pm-phase">${phaseTxt}</div>
       <div class="pm-time" id="pm-time">${fmt(remaining())}</div>
       <div class="pm-progress"><i id="pm-bar"></i></div>
       <div class="pm-diagram">${diagramSVG(ex, h, nm, { cls: "diagram run-dg", flip })}</div>
+      <ol class="pm-seq" id="pm-seq">${seqHTML}</ol>
       ${RUN.phase === "break" ? `<p class="pm-next">${showIt.id === it.id ? `Jetzt ist ${esc(nm.A)} dran.` : "Kurz trinken, dann geht's weiter."}</p>` : ""}
       <div class="pm-controls"><button class="pm-btn" id="pm-pause">${RUN.paused ? "▶ Weiter" : "⏸ Pause"}</button><button class="pm-btn main" id="pm-skip">${RUN.phase === "work" ? "Fertig ⏭" : "Jetzt starten"}</button></div>
       <p class="pm-hint">${RUN.live ? (LIVE ? `ᛒ Live mit ${esc(LIVE.name)} · Pause und Weiter gelten für beide` : "Live-Verbindung getrennt · läuft hier weiter") : (HAS_BT || navigator.wakeLock ? "Nach links wischen: weiter · Display bleibt an" : "Nach links wischen: weiter")}</p>`;
     $("#pm-x").onclick = () => back();
+    $("#pm-edit").onclick = () => { if (!RUN.paused) togglePause(); openEditor(showIt.id); };
     $("#pm-pause").onclick = togglePause;
     $("#pm-skip").onclick = skipNow;
     tick();
-    playAnim($(".run-dg", el), ex, h);
+    playAnim($(".run-dg", el), ex, h, markStep($("#pm-seq", el)));
   }
   (function swipe() {
     let x0 = null, y0 = null;
@@ -1020,7 +1052,7 @@
       app: "tttraining", v: 1,
       me: { id: myId(), name: pName(0), hand: S.players[0].hand },
       alias: useAlias && S.players[1].local ? S.players[1].id : null,
-      log: S.log, custom: S.custom, del: S.delEx, people,
+      log: S.log, custom: S.custom, del: S.delEx, people, over: S.over,
     });
   }
   function applySync(txt, useAlias) {
@@ -1058,6 +1090,10 @@
     });
     S.custom = S.custom.filter((c) => !S.delEx.includes(c.id));
     customCache.clear(); thumbCache.clear();
+    Object.entries(isObj(o.over) ? o.over : {}).forEach(([id, rec]) => {
+      if (BUILT_BY_ID[id] && rec && (!S.over[id] || (rec.upd || 0) > (S.over[id].upd || 0))) S.over[id] = rec;
+    });
+    overCache.clear();
     // 4. Personen und Partner
     Object.entries(o.people || {}).forEach(([id, x]) => { if (id !== me && !S.people[id] && x && x.name) S.people[id] = { name: x.name, hand: x.hand || "R" }; });
     S.people[o.me.id] = { name: o.me.name || "Partner", hand: o.me.hand || "R" };
@@ -1213,6 +1249,8 @@
       <h3>Signale</h3>
       ${sw("st-sound", "Ton am Ende jeder Übung", st.sound)}
       ${sw("st-vib", "Vibration", st.vib)}
+      <p class="seg-label">Lautstärke der Signale</p><div class="seg" id="st-vol"></div>
+      <p class="muted small">Zusätzlich hängt es an der Medienlautstärke des Handys.</p>
       <button class="secondary-btn" id="st-test">Signal testen</button>
       <h3>Darstellung</h3>
       <div class="seg" id="st-theme"></div>
@@ -1229,7 +1267,8 @@
       };
       step("#st-pm", "#st-pp", "#st-pv", "pause", 0, 180, 5);
       step("#st-lm", "#st-lp", "#st-lv", "lead", 3, 30, 1);
-      $("#st-test", el).onclick = () => { ensureAudio(); endSignal(); };
+      $("#st-test", el).onclick = () => { ensureAudio(); startSignal(); setTimeout(endSignal, 1100); };
+      segHTML($("#st-vol", el), [["normal", "Normal"], ["laut", "Laut"], ["sehrlaut", "Sehr laut"]], st.vol || "laut", (v) => { st.vol = v; save(); ensureAudio(); startSignal(); });
       segHTML($("#st-theme", el), [["auto", "Automatisch"], ["light", "Hell"], ["dark", "Dunkel"]], st.theme, (v) => { st.theme = v; save(); applyTheme(); });
       $("#st-exp", el).onclick = exportSheet;
       $("#st-imp", el).onclick = importSheet;
@@ -1276,7 +1315,7 @@
     ["Lange Bälle", ["TS", "KO", "BL"]],
     ["Abwehr", ["AB", "BA", "SM"]],
   ];
-  const BUILT_SIGS = (() => { const m = new Map(); BUILTIN.forEach((ex) => E.signature(ex).forEach((v) => { if (!m.has(v)) m.set(v, ex.name); })); return m; })();
+  const BUILT_SIGS = (() => { const m = new Map(); BUILTIN.forEach((ex) => E.signature(ex).forEach((v) => { if (!m.has(v)) m.set(v, ex); })); return m; })();
   let ED = null;
   function edFromEx(ex) {
     const st = E.parse(ex);
@@ -1286,13 +1325,15 @@
     };
   }
   function openEditor(id, template) {
-    const src = id ? S.custom.find((c) => c.id === id) : null;
-    const base = src ? customToEx(src) : template || null;
+    const isBuilt = !!(id && BUILT_BY_ID[id]);
+    const src = id && !isBuilt ? S.custom.find((c) => c.id === id) : null;
+    const cur = isBuilt ? BY_ID[id] : src ? customToEx(src) : null;
+    const base = cur || template || null;
     ED = {
-      id: src ? src.id : null,
-      name: src ? src.name : template ? template.name + " (eigene)" : "",
-      goal: base ? base.goal : "kontrolle", lv: base ? base.lv : 1, dur: base ? (src ? src.dur : durOf(template)) : 5,
-      end: base ? base.end : "loop", d: src ? src.d || "" : template ? template.d : "", t: src ? src.t || "" : template ? template.t : "",
+      id: cur ? id : null, builtin: isBuilt,
+      name: cur ? cur.name : template ? template.name + " (eigene)" : "",
+      goal: base ? base.goal : "kontrolle", lv: base ? base.lv : 1, dur: base ? durOf(base) : 5,
+      end: base ? base.end : "loop", d: src ? src.d || "" : cur ? cur.d : template ? template.d : "", t: cur ? cur.t || "" : template ? template.t : "",
       first: "A", from: "RH",
       steps: [{ st: "KO", side: "VH", to: ["VH"], short: false }, { st: "KO", side: "VH", to: ["VH"], short: false }],
       dirty: !!template, saved: false,
@@ -1313,6 +1354,7 @@
   function closeEditor() {
     stopAnim(); ED = null;
     const el = $("#editor"); el.classList.add("hidden"); el.innerHTML = ""; updateLock();
+    if (RUN && RUN.phase !== "done") renderRun();
     if (detailEx) { detailEx = BY_ID[detailEx.id] || null; if (detailEx) renderDetail(); }
   }
   function edHitter(i) { return (i % 2 === 0) === (ED.first === "A") ? "A" : "B"; }
@@ -1330,7 +1372,7 @@
     try { errs = E.validate(ex); } catch (e) { errs = ["Ablauf nicht lesbar"]; }
     errs = [...new Set(errs)];
     let same = null;
-    if (!errs.length) { for (const v of E.signature(ex)) if (BUILT_SIGS.has(v)) { same = BUILT_SIGS.get(v); break; } }
+    if (!errs.length) { for (const v of E.signature(ex)) if (BUILT_SIGS.has(v) && BUILT_SIGS.get(v).id !== rec.id) { same = BUILT_SIGS.get(v).name; break; } }
     return { errs, same, ex };
   }
   function renderEditor() {
@@ -1362,6 +1404,7 @@
               <label class="field"><span>Worauf achten (optional)</span><textarea id="ed-t" maxlength="400" style="font-family:inherit;font-size:.95rem;min-height:80px">${esc(ED.t)}</textarea></label>
             </div>
             <button class="fire-btn" id="ed-save2">Übung speichern</button>
+            ${ED.builtin && S.over[ED.id] ? `<button class="secondary-btn danger wide top-gap" id="ed-reset">Original wiederherstellen</button>` : ""}
           </div>
         </div>
       </div>`;
@@ -1381,6 +1424,8 @@
     $("#ed-add", el).onclick = () => { edAddStep(); edRefresh(); };
     $("#ed-add2", el).onclick = () => { edAddStep(); edAddStep(); edRefresh(); };
     $("#ed-save", el).onclick = edSave; $("#ed-save2", el).onclick = edSave;
+    const rs = $("#ed-reset", el);
+    if (rs) rs.onclick = () => { delete S.over[ED.id]; delete S.dur[ED.id]; overCache.delete(ED.id); save(); thumbCache.clear(); ED.saved = true; renderLib(); renderDiceRes(); back(); toast("Original wiederhergestellt"); };
     $("#ed-steps", el).addEventListener("click", edStepClick);
     $("#ed-steps", el).addEventListener("change", (e) => {
       const sel = e.target.closest("select[data-st]"); if (!sel) return;
@@ -1445,8 +1490,11 @@
     const rec = edRecord(), chk = edCheck(rec);
     const doSave = () => {
       rec.upd = Date.now();
-      const k = S.custom.findIndex((c) => c.id === rec.id);
-      if (k >= 0) S.custom[k] = rec; else S.custom.push(rec);
+      if (ED.builtin) { S.over[rec.id] = rec; overCache.delete(rec.id); }
+      else {
+        const k = S.custom.findIndex((c) => c.id === rec.id);
+        if (k >= 0) S.custom[k] = rec; else S.custom.push(rec);
+      }
       delete S.dur[rec.id];
       save(); thumbCache.clear(); ED.saved = true;
       renderLib(); renderDiceRes();
