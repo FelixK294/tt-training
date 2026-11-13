@@ -36,7 +36,7 @@
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const VERSION = "1.6";
+  const VERSION = "1.7";
 
   // ------------------------------------------------------------------ Speicher
   const KEY = "tttraining.v1";
